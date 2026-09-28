@@ -61,8 +61,44 @@ int main()
         printf("%s\n", request_buffer);
     }
 
-    char *request_frac = strtok(request_buffer, " ");
-    printf("%s\n", request_frac);
+    char *request_method = strtok(request_buffer, " ");
+    printf("Method type: %s\n", request_method);
+    char *request_path = strtok(NULL, " ");
+    printf("Path: %s\n", request_path);
+
+    if (strcmp(request_path, "/sendText.html") == 0)
+    {
+        FILE *f = fopen("sendText.html", "r");
+        if (f == NULL)
+        {
+            printf("File not found.\n");
+            return -1;
+        }
+
+        fseek(f, 0L, SEEK_END);
+        int fs = ftell(f);
+        rewind(f);
+
+        char *file_text = malloc(288);
+        if (file_text == NULL)
+        {
+            perror("malloc");
+            return -1;
+        }
+
+        if (file_text)
+        {
+            size_t bytes_read = fread(file_text, 1, fs, f);
+            file_text[bytes_read] = '\0';
+
+            fclose(f);
+
+            printf("%s\n", file_text);
+            send(p, file_text, fs, 0);
+
+            free(file_text);
+        }
+    }
 
     send(p, message_buffer, strlen(message_buffer), 0);
 
