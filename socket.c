@@ -48,10 +48,6 @@ int main()
         printf("Request buffer memory allocation failed.\n");
         return 0;
     }
-    char message_buffer[] = "HTTP/1.1 200 OK\r\n"
-                            "Content-Length: 15\r\n"
-                            "\r\n"
-                            "Hello, World!\r\n";
 
     ssize_t bytes = recv(p, request_buffer, 4095, 0);
     printf("Received %zd bytes\n", bytes);
@@ -66,6 +62,8 @@ int main()
     char *request_path = strtok(NULL, " ");
     printf("Path: %s\n", request_path);
 
+    char *file_text;
+    int fs;
     if (strcmp(request_path, "/sendText.html") == 0)
     {
         FILE *f = fopen("sendText.html", "r");
@@ -76,10 +74,10 @@ int main()
         }
 
         fseek(f, 0L, SEEK_END);
-        int fs = ftell(f);
+        fs = ftell(f);
         rewind(f);
 
-        char *file_text = malloc(288);
+        file_text = malloc(fs + 1);
         if (file_text == NULL)
         {
             perror("malloc");
@@ -92,16 +90,26 @@ int main()
             file_text[bytes_read] = '\0';
 
             fclose(f);
-
-            printf("%s\n", file_text);
-            send(p, file_text, fs, 0);
-
-            free(file_text);
         }
     }
 
-    send(p, message_buffer, strlen(message_buffer), 0);
+    char *full_response = malloc(4096);
+    if (full_response == NULL)
+    {
+        perror("malloc");
+        return -1;
+    }
 
+    snprintf(full_response, 4096, "HTTP/1.1 200 OK\r\n"
+                                  "Content-Length: %d\r\n"
+                                  "\r\n",
+             fs);
+
+    send(p, full_response, strlen(full_response), 0);
+    send(p, file_text, fs, 0);
+    free(file_text);
     free(request_buffer);
+    free(full_response);
+
     return 0;
 }
