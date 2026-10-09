@@ -12,6 +12,7 @@ int main()
     if (my_socket < 0)
     {
         printf("Connected failed. Failed to create socket.");
+        return 1;
     }
 
     struct sockaddr_in my_socket_add;
@@ -40,9 +41,12 @@ int main()
         return 1;
     }
 
+    struct sockaddr_in client_addr;
+
     while (1)
     {
-        int p = accept(my_socket, (struct sockaddr *)&my_socket_add, &sockaddr_len);
+        socklen_t client_addr_size = sizeof(client_addr);
+        int p = accept(my_socket, (struct sockaddr *)&client_addr, &client_addr_size);
         if (p < 0)
         {
             perror("accept");
@@ -59,21 +63,43 @@ int main()
 
         ssize_t bytes = recv(p, request_buffer, 4095, 0);
         printf("Received %zd bytes\n", bytes);
-        if (bytes < 0)
+
+        if (bytes > 0)
         {
             request_buffer[bytes] = '\0';
             printf("%s\n", request_buffer);
         }
+        if (bytes < 0)
+        {
+            perror("recv");
+            free(request_buffer);
+            close(p);
+            continue;
+        }
+        if (bytes == 0)
+        {
+            free(request_buffer);
+            close(p);
+            continue;
+        }
 
         char *request_method = strtok(request_buffer, " ");
-        printf("Method type: %s\n", request_method);
         char *request_path = strtok(NULL, " ");
+
+        if (request_method == NULL || request_path == NULL)
+        {
+            printf("Bad request\n");
+            free(request_buffer);
+            close(p);
+            continue;
+        }
 
         if (request_path != NULL)
         {
             request_path++;
+            printf("Method type: %s\n", request_method);
+            printf("Path: %s\n", request_path);
         }
-        printf("Path: %s\n", request_path);
 
         char *file_text;
         int fs;
@@ -87,35 +113,60 @@ int main()
             return -1;
         }
 
+        int found = 0;
+
         while ((dir_entry = readdir(dir)) != NULL)
         {
             if ((strcmp(dir_entry->d_name, request_path) == 0))
             {
-                FILE *f = fopen(request_path, "r");
-                if (f == NULL)
-                {
-                    printf("File not found.\n");
-                    return -1;
-                }
+                found = 1;
+                break;
+            }
+        }
 
-                fseek(f, 0L, SEEK_END);
-                fs = ftell(f);
-                rewind(f);
+        closedir(dir);
 
-                file_text = malloc(fs + 1);
-                if (file_text == NULL)
-                {
-                    perror("malloc");
-                    return -1;
-                }
+        if (found == 0)
+        {
+            printf("File not found.\n");
+            free(request_buffer);
+            close(p);
+            continue;
+        }
 
-                if (file_text)
-                {
-                    size_t bytes_read = fread(file_text, 1, fs, f);
-                    file_text[bytes_read] = '\0';
+        FILE *f = fopen(request_path, "r");
+        if (f == NULL)
+        {
+            printf("File not found.\n");
+            free(request_buffer);
+            close(p);
+            continue;
+        }
 
-                    fclose(f);
-                }
+        fseek(f, 0L, SEEK_END);
+        fs = ftell(f);
+        rewind(f);
+
+        file_text = malloc(fs + 1);
+        if (file_text == NULL)
+        {
+            perror("malloc");
+            return -1;
+        }
+
+        if (file_text)
+        {
+            size_t bytes_read = fread(file_text, 1, fs, f);
+            file_text[bytes_read] = '\0';
+            fclose(f);
+
+            if (bytes_read != fs)
+            {
+                perror("fread");
+                free(file_text);
+                free(request_buffer);
+                close(p);
+                continue;
             }
         }
 
