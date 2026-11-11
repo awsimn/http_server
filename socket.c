@@ -20,12 +20,11 @@ void *thread_function(void *arg)
             perror("accept");
             pthread_exit(NULL);
         }
-        // printf("Connected established.\n");
 
         char *request_buffer = malloc(sizeof(char) * 4096);
         if (request_buffer == NULL)
         {
-            // printf("Request buffer memory allocation failed.\n");
+            perror("malloc");
             close(p);
             pthread_exit(NULL);
         }
@@ -36,7 +35,6 @@ void *thread_function(void *arg)
         if (bytes > 0)
         {
             request_buffer[bytes] = '\0';
-            // printf("%s\n", request_buffer);
         }
         if (bytes < 0)
         {
@@ -57,7 +55,10 @@ void *thread_function(void *arg)
 
         if (request_method == NULL || request_path == NULL)
         {
-            // printf("Bad request\n");
+            char *fail_response = "HTTP/1.1 400 Bad Request\r\n"
+                                  "Content-Length: 0\r\n"
+                                  "\r\n";
+            send(p, fail_response, strlen(fail_response), 0);
             free(request_buffer);
             close(p);
             continue;
@@ -66,8 +67,6 @@ void *thread_function(void *arg)
         if (request_path != NULL)
         {
             request_path++;
-            // printf("Method type: %s\n", request_method);
-            // printf("Path: %s\n", request_path);
         }
 
         char *file_text;
@@ -98,7 +97,6 @@ void *thread_function(void *arg)
 
         if (found == 0)
         {
-            // printf("File not found.\n");
             char *fail_response = "HTTP/1.1 404 File not found\r\n"
                                   "Content-Length: 0\r\n"
                                   "\r\n";
@@ -111,7 +109,10 @@ void *thread_function(void *arg)
         FILE *f = fopen(request_path, "r");
         if (f == NULL)
         {
-            // printf("File not found.\n");
+            char *fail_response = "HTTP/1.1 404 File not found\r\n"
+                                  "Content-Length: 0\r\n"
+                                  "\r\n";
+            send(p, fail_response, strlen(fail_response), 0);
             free(request_buffer);
             close(p);
             continue;
@@ -176,7 +177,7 @@ int main()
     int listen_socket = socket(AF_INET, SOCK_STREAM, 0);
     if (listen_socket < 0)
     {
-        // printf("Connection failed. Failed to create socket.");
+        perror("socket");
         return -1;
     }
 
@@ -210,7 +211,6 @@ int main()
     }
 
     int max_threads = sysconf(_SC_NPROCESSORS_ONLN);
-    // printf("Max threads allowed: %d\n", max_threads);
 
     pthread_t threads[max_threads];
     for (size_t i = 0; i < max_threads; i++)
@@ -226,7 +226,6 @@ int main()
             fprintf(stderr, "pthread_create failed: %s\n",
                     strerror(result));
         }
-        // printf("Thread created\n");
     }
 
     for (size_t i = 0; i < max_threads; i++)
